@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Telefonbuch Frontend</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: #f4f4f9; }
+        h1 { color: #333; }
+        .form-group { margin-bottom: 15px; }
+        .phone-group { display: flex; gap: 10px; }
+        .prefix-input { width: 30% !important; }
+        .phone-input { width: 70% !important; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"] { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #28a745; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-size: 14px; }
+        button:hover { background: #218838; }
+        .kontakt-liste { margin-top: 30px; background: white; padding: 15px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .kontakt-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .kontakt-item:last-child { border-bottom: none; }
+        .btn-delete { background: #dc3545; padding: 5px 10px; }
+        .btn-delete:hover { background: #bd2130; }
+    </style>
+</head>
+<body>
+
+    <h1>📞 Telefonbuch Kontakte</h1>
+
+    <!-- Formular zum Anlegen -->
+    <div style="background: white; padding: 15px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h3>Neuen Kontakt hinzufügen</h3>
+        <div class="form-group">
+            <label>Vorname</label>
+            <input type="text" id="vorname">
+        </div>
+        <div class="form-group">
+            <label>Nachname</label>
+            <input type="text" id="nachname">
+        </div>
+        <div class="form-group">
+            <label>Telefonnummer</label>
+            <div class="phone-group">
+                <input type="text" id="phone_prefix" class="prefix-input" placeholder="Vorwahl (z.B. 089)">
+                <input type="text" id="phone" class="phone-input" placeholder="Nummer (z.B. 123456)">
+            </div>
+        </div>
+        <button onclick="kontaktAnlegen()">Speichern</button>
+    </div>
+
+    <!-- Bereich für die Liste -->
+    <div class="kontakt-liste">
+        <h3>Aktive Kontakte</h3>
+        <div id="kontakte-container">Wird geladen...</div>
+    </div>
+
+    <script>
+        // HIER DIE IP DES API-RECHNERS EINTRAGEN!
+        const API_URL = "http://192.168.178.24:8000"; 
+
+        // 1. Kontakte laden und anzeigen
+        async function kontakteLaden() {
+            try {
+                const response = await fetch(`${API_URL}/kontakte/`);
+                const kontakte = await response.json();
+                
+                const container = document.getElementById('kontakte-container');
+                container.innerHTML = '';
+
+                if (kontakte.length === 0) {
+                    container.innerHTML = '<p>Keine Kontakte vorhanden.</p>';
+                    return;
+                }
+
+                kontakte.forEach(k => {
+                    const item = document.createElement('div');
+                    item.className = 'kontakt-item';
+                    
+                    // Formatierung der Telefonnummer für die Anzeige
+                    const prefix = k.phonenumber_prefix ? k.phonenumber_prefix : "";
+                    const nummer = k.phonenumber ? k.phonenumber : "";
+                    const telAnzeige = (prefix || nummer) ? `${prefix} ${nummer}`.strip() : "Keine Nummer";
+
+                    item.innerHTML = `
+                        <div>
+                            <strong>${k.first_name} ${k.last_name}</strong> <br>
+                            <small>Tel: ${telAnzeige}</small>
+                        </div>
+                        <button class="btn-delete" onclick="kontaktLoeschen(${k.id})">Löschen</button>
+                    `;
+                    container.appendChild(item);
+                });
+            } catch (error) {
+                console.error("Fehler:", error);
+                document.getElementById('kontakte-container').innerText = "Fehler beim Laden der Daten.";
+            }
+        }
+
+        // 2. Neuen Kontakt senden
+        async function kontaktAnlegen() {
+            const first_name = document.getElementById('vorname').value;
+            const last_name = document.getElementById('nachname').value;
+            const phone_prefix = document.getElementById('phone_prefix').value;
+            const phone = document.getElementById('phone').value;
+
+            if (!first_name || !last_name) {
+                alert("Vor- und Nachname sind Pflichtfelder!");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/kontakte/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        first_name, 
+                        last_name, 
+                        phone_prefix, 
+                        phone 
+                    })
+                });
+
+                if (response.ok) {
+                    // Formular leeren und Liste neu laden
+                    document.getElementById('vorname').value = '';
+                    document.getElementById('nachname').value = '';
+                    document.getElementById('phone_prefix').value = '';
+                    document.getElementById('phone').value = '';
+                    kontakteLaden();
+                } else {
+                    alert("Fehler beim Speichern!");
+                }
+            } catch (error) {
+                console.error("Fehler:", error);
+            }
+        }
+
+        // 3. Soft-Delete ausführen
+        async function kontaktLoeschen(id) {
+            if (!confirm(`Möchtest du Kontakt ID ${id} wirklich löschen?`)) return;
+
+            try {
+                const response = await fetch(`${API_URL}/kontakte/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    kontakteLaden();
+                } else {
+                    alert("Fehler beim Löschen!");
+                }
+            } catch (error) {
+                console.error("Fehler:", error);
+            }
+        }
+
+        // Hilfsfunktion für JavaScript-Strings (.strip() wie in Python)
+        String.prototype.strip = function() {
+            return this.replace(/^\s+|\s+\$/g, '');
+        };
+
+        // Beim Starten der Seite Kontakte laden
+        kontakteLaden();
+    </script>
+</body>
+</html>

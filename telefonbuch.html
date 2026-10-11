@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telefonbuch Management</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-100 font-sans text-gray-800">
+
+    <div class="container mx-auto p-4 max-w-4xl">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-indigo-600">📱 Telefonbuch Kontakte</h1>
+            <p class="text-gray-500 mt-2"></p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">            
+            <div class="bg-white p-6 rounded-lg shadow md:col-span-1 h-fit">
+                <h2 id="form-title" class="text-xl font-semibold mb-4 text-gray-700">Kontakt anlegen</h2>
+                <form id="kontakt-form" class="space-y-4">
+                    <input type="hidden" id="kontakt-id">
+                    <div>
+                        <input type="hidden" id="edit_kontakt_id" value="">
+                        <label class="block text-sm font-medium text-gray-600">Vorname *</label>
+                        <input type="text" id="first_name" required class="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 bg-gray-50 border focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600">Nachname *</label>
+                        <input type="text" id="last_name" required class="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 bg-gray-50 border focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="col-span-1">
+                            <label class="block text-sm font-medium text-gray-600">Vorwahl</label>
+                            <input type="text" id="phone_prefix" placeholder="+49" class="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 bg-gray-50 border focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-sm font-medium text-gray-600">Telefonnummer</label>
+                            <input type="text" id="phone" placeholder="123456" class="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 bg-gray-50 border focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        </div>
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" id="btn-save" class="w-full bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700 transition">Speichern</button>
+                        <button type="button" id="btn-cancel" class="hidden w-full bg-gray-400 text-white py-2 px-4 rounded hover:bg-gray-500 transition">Abbrechen</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- RECHTER BEREICH: SUCHE & LISTEN -->
+            <div class="md:col-span-2 space-y-6">
+                
+                <!-- SUCHE & NAVIGATION -->
+                <div class="bg-white p-4 rounded-lg shadow flex flex-col sm:flex-row gap-4 items-center justify-between">
+                    <div class="relative w-full sm:w-72">
+                        <input type="text" id="search-input" placeholder="Suchen nach Name oder ID..." class="w-full rounded border p-2 pr-8 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                    <div class="flex gap-2 w-full sm:w-auto">
+                        <button id="tab-kontakte" class="flex-1 sm:flex-initial bg-indigo-100 text-indigo-700 font-medium py-2 px-4 rounded border border-indigo-200">Kontakte</button>
+                        <button id="tab-papierkorb" class="flex-1 sm:flex-initial bg-gray-100 text-gray-600 font-medium py-2 px-4 rounded border border-gray-200 hover:bg-gray-200">🗑️ Papierkorb</button>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                    <div class="p-4 bg-gray-50 border-b">
+                        <h3 id="list-title" class="font-bold text-gray-700">Aktive Kontakte</h3>
+                    </div>
+                    <ul id="kontakte-liste" class="divide-y divide-gray-200 max-h-[500px] overflow-y-auto">
+                    </ul>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    <script>
+    // Konfiguration deiner FastAPI-Schnittstelle
+//const API_BASE_URL = "http://192.168.178.24:8000"; 
+const API_BASE_URL = "http://localhost:8000"; 
+let aktuellerTab = "kontakte"; 
+
+const form = document.getElementById("kontakt-form");
+const formTitle = document.getElementById("form-title");
+const inputId = document.getElementById("kontakt-id");
+const inputFirstName = document.getElementById("first_name");
+const inputLastName = document.getElementById("last_name");
+const inputPrefix = document.getElementById("phone_prefix");
+const inputPhone = document.getElementById("phone");
+const btnSave = document.getElementById("btn-save");
+const btnCancel = document.getElementById("btn-cancel");
+
+const searchInput = document.getElementById("search-input");
+const tabKontakte = document.getElementById("tab-kontakte");
+const tabPapierkorb = document.getElementById("tab-papierkorb");
+const listTitle = document.getElementById("list-title");
+const liste = document.getElementById("kontakte-liste");
+
+document.addEventListener("DOMContentLoaded", () => {
+    datenLaden(); 
+    form.addEventListener("submit", kontaktSpeichern);
+    btnCancel.addEventListener("click", formularZuruecksetzen);
+    searchInput.addEventListener("input", () => {
+        if (aktuellerTab === "kontakte") datenLaden(searchInput.value);
+    });
+    
+
+    tabKontakte.addEventListener("click", () => switchTab("kontakte"));
+    tabPapierkorb.addEventListener("click", () => switchTab("papierkorb"));
+});
+
+function switchTab(tab) {
+    aktuellerTab = tab;
+    formularZuruecksetzen(); 
+    
+    if (tab === "kontakte") {
+        tabKontakte.className = "bg-indigo-100 text-indigo-700 font-medium py-2 px-4 rounded border border-indigo-200";
+        tabPapierkorb.className = "bg-gray-100 text-gray-600 font-medium py-2 px-4 rounded border border-gray-200 hover:bg-gray-200";
+        listTitle.textContent = "Aktive Kontakte";
+        searchInput.classList.remove("invisible"); 
+        datenLaden(); 
+    } else {
+
+        tabPapierkorb.className = "bg-red-100 text-red-700 font-medium py-2 px-4 rounded border border-red-200";
+        tabKontakte.className = "bg-gray-100 text-gray-600 font-medium py-2 px-4 rounded border border-gray-200 hover:bg-gray-200";
+        listTitle.textContent = "Papierkorb (Gelöschte Einträge)";
+        searchInput.classList.add("invisible"); 
+        papierkorbLaden(); 
+    }
+}
+
+function listeAnzeigen(kontakte, imPapierkorb = false) {
+    liste.innerHTML = ""; 
+    
+    if (kontakte.length === 0) {
+        liste.innerHTML = `<li class="p-4 text-gray-500 text-center">Keine Einträge gefunden.</li>`;
+        return;
+    }
+
+    kontakte.forEach(k => {
+    const li = document.createElement("li");
+    
+    const fName = k.first_name || "";
+    const lName = k.last_name || "";
+    const prefix = k.phonenumber_prefix || "";
+    const phone = k.phonenumber || "";
+    const fullPhone = (prefix || phone) ? `${prefix} ${phone}`.trim() : "Keine Nummer";
+
+    li.innerHTML = `
+    <div>
+        <div class="name">${fName} ${lName}</div>
+        <div class="phone">${fullPhone}</div>
+        <div class="id-tag">ID: ${k.id}</div>
+    </div>
+    <div class="flex-gap">
+        ${!imPapierkorb ? `
+            <button class="btn-edit">🔑 Bearbeiten</button>
+            <button class="btn-delete">🗑️ Löschen</button>
+        ` : `
+            <button class="btn-restore">🔄 Wiederherstellen</button>
+        `}
+    </div>
+    `;
+
+    const editBtn = li.querySelector(".btn-edit");
+    const deleteBtn = li.querySelector(".btn-delete");
+    const restoreBtn = li.querySelector(".btn-restore");
+
+    if (editBtn) {
+        editBtn.addEventListener("click", () => {
+
+            inputId.value = k.id; 
+
+            inputFirstName.value = fName;
+            inputLastName.value = lName;
+            inputPrefix.value = prefix;
+            inputPhone.value = phone;
+
+            if (typeof formTitle !== 'undefined') formTitle.textContent = "Kontakt bearbeiten";
+            if (typeof btnSave !== 'undefined') btnSave.textContent = "Änderungen speichern";
+            if (typeof btnCancel !== 'undefined') btnCancel.classList.remove("hidden");
+        });
+    }
+
+
+    if (deleteBtn) {
+        deleteBtn.addEventListener("click", () => {
+            kontaktLoeschen(k.id);
+        });
+    }
+
+    if (restoreBtn) {
+        restoreBtn.addEventListener("click", () => {
+            kontaktWiederherstellen(k.id);
+        });
+    }
+
+    liste.appendChild(li);
+});
+}
+
+function formularZuruecksetzen() {
+    form.reset();
+    inputId.value = "";
+    formTitle.textContent = "Kontakt anlegen";
+    btnSave.textContent = "Speichern";
+    btnCancel.classList.add("hidden"); 
+}
+
+
+async function kontaktSpeichern(e) {
+    e.preventDefault(); 
+    
+    const id = inputId.value;
+    const payload = {
+        first_name: inputFirstName.value,
+        last_name: inputLastName.value,
+        phone_prefix: inputPrefix.value,
+        phone: inputPhone.value
+    };
+
+    try {
+        let url = `${API_BASE_URL}/kontakte/`;
+        let method = "POST";
+
+        if (id) { 
+            url += id;
+            method = "PUT";
+        }
+
+        const response = await fetch(url, {
+            method: method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            formularZuruecksetzen();
+            datenLaden();
+            if (aktuellerTab !== "kontakte") switchTab("kontakte");
+        } else {
+            const errorData = await response.json();
+            alert(`Fehler: ${errorData.detail}`);
+        }
+    } catch (error) {
+        alert("Verbindung zum Server fehlgeschlagen.");
+    }
+}
+
+async function datenLaden(query = "") {
+    try {
+        let url = `${API_BASE_URL}/kontakte/`;
+        if (query.trim() !== "") {
+            url += `?q=${encodeURIComponent(query.trim())}`;
+        }
+        
+        const response = await fetch(url);
+        const kontakte = await response.json();
+        listeAnzeigen(kontakte, false); 
+    } catch (error) {
+        console.error("Fehler beim Laden der Kontakte:", error);
+        liste.innerHTML = `<li class="p-4 text-red-500 text-center">Fehler beim Verbinden mit der API.</li>`;
+    }
+}
+
+async function papierkorbLaden() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/papierkorb/`);
+        const kontakte = await response.json();
+        listeAnzeigen(kontakte, true); 
+    } catch (error) {
+        console.error("Fehler beim Laden des Papierkorbs:", error);
+        liste.innerHTML = `<li class="p-4 text-red-500 text-center">Fehler beim Laden des Papierkorbs.</li>`;
+    }
+}
+
+async function kontaktLoeschen(id) {
+    if (!confirm(`Möchtest du Kontakt ID ${id} wirklich löschen?`)) return;
+
+    try {
+
+        const response = await fetch(`${API_BASE_URL}/kontakte/${id}`, {
+            method: 'DELETE', 
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            alert("Kontakt erfolgreich gelöscht!");
+            
+
+            if (typeof kontakteLaden === "function") {
+                kontakteLaden(); 
+            } else {
+                window.location.reload(); 
+            }
+        } else {
+
+            const errorText = await response.text();
+            console.error(`API-Fehler (${response.status}):`, errorText);
+            alert(`Server-Fehler beim Löschen! Status: ${response.status}\nDetails in der Konsole.`);
+        }
+    } catch (error) {
+        console.error("Netzwerkfehler beim Löschen:", error);
+        alert("Netzwerkfehler: Die API konnte nicht erreicht werden.");
+    }
+}
+
+
+window.kontaktBearbeitenAnfordern = function(id, firstName, lastName, prefix, phone) {
+    formTitle.textContent = "Kontakt bearbeiten";
+    inputId.value = id;
+    inputFirstName.value = firstName;
+    inputLastName.value = lastName;
+    inputPrefix.value = prefix === "undefined" || !prefix ? "" : prefix;
+    inputPhone.value = phone === "undefined" || !phone ? "" : phone;
+    btnSave.textContent = "Aktualisieren";
+    btnCancel.classList.remove("hidden"); 
+}
+
+window.kontaktWiederherstellen = async function(id) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/papierkorb/${id}/wiederherstellen`, { method: "POST" });
+        if (response.ok) {
+            papierkorbLaden();
+        } else {
+            alert("Wiederherstellung fehlgeschlagen.");
+        }
+    } catch (error) {
+        console.error("Wiederherstellung fehlgeschlagen:", error);
+    }
+}
+  </script>
+</body>
+</html>
+
+
+
