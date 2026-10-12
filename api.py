@@ -78,7 +78,7 @@ def api_kontakt_anlegen(kontakt: KontaktIn):
             phone_prefix=kontakt.phone_prefix.strip(),
             phone=kontakt.phone.strip()
         )
-        db.save_user(db_path, TABLE_NAME, neue_person)
+        neue_person.save_user(db_path, TABLE_NAME, neue_person)
 
         return KontaktOut(
             id=neue_person.id,
@@ -96,10 +96,10 @@ def api_kontakt_suchen(q: Optional[str] = Query(None, description="Suchbegriff f
     """2: Kontakt suchen / Alle anzeigen"""
     try:
         if not q or q.strip() == "":
-            rows = db.fetch_data(db_path, TABLE_NAME)
+            rows = db.select(db_path, TABLE_NAME)
             ergebnisse = [User.from_dict(r) for r in rows]
         else:
-            ergebnisse = db.search_persons(db_path, TABLE_NAME, q.strip())
+            ergebnisse = User.search_user(db_path, TABLE_NAME, q.strip())
             
         return [
             KontaktOut(
@@ -118,7 +118,7 @@ def api_kontakt_suchen(q: Optional[str] = Query(None, description="Suchbegriff f
 def api_kontakt_bearbeiten(kontakt_id: int, kontakt_daten: KontaktIn):
     """3: Kontakt bearbeiten"""
     try:
-        db_ergebnis = db.fetch_data(db_path, TABLE_NAME, condition_str="id = ?", condition_values=(kontakt_id,))
+        db_ergebnis = db.select(db_path, TABLE_NAME, condition_str="id = ?", condition_values=(kontakt_id,))
         if not db_ergebnis:
             raise HTTPException(status_code=404, detail="Kontakt mit dieser ID nicht gefunden.")
         
@@ -129,7 +129,7 @@ def api_kontakt_bearbeiten(kontakt_id: int, kontakt_daten: KontaktIn):
         person.phonenumber_prefix = kontakt_daten.phone_prefix.strip() or person.phonenumber_prefix
         person.phonenumber = kontakt_daten.phone.strip() or person.phonenumber
         
-        if db.save_user(db_path, TABLE_NAME, person):
+        if person.save_user(db_path, TABLE_NAME, person):
             return KontaktOut(
                 id=person.id,
                 first_name=person.first_name,
@@ -149,7 +149,7 @@ def api_kontakt_bearbeiten(kontakt_id: int, kontakt_daten: KontaktIn):
 def api_kontakt_loeschen(kontakt_id: int):
     """4: Kontakt löschen (Soft-Delete)"""
     try:
-        erfolg = db.delete_data(db_path, TABLE_NAME, condition_str="id = ?", condition_values=(kontakt_id,))
+        erfolg = db.delete(db_path, TABLE_NAME, condition_str="id = ?", condition_values=(kontakt_id,))
         if erfolg:
             return {"status": "success", "message": f"Kontakt ID {kontakt_id} wurde in den Papierkorb verschoben."}
         else:
@@ -162,7 +162,7 @@ def api_kontakt_loeschen(kontakt_id: int):
 def api_papierkorb_anzeigen():
     """5a: Admin-Papierkorb anzeigen"""
     try:
-        rows = db.fetch_data(db_path, TABLE_NAME, condition_str="deleted = 1", include_deleted=True)
+        rows = db.select(db_path, TABLE_NAME, condition_str="deleted = 1", include_deleted=True)
         geloeschte = [User.from_dict(r) for r in rows]
         return [
             KontaktOut(
@@ -181,7 +181,7 @@ def api_papierkorb_anzeigen():
 def api_kontakt_wiederherstellen(kontakt_id: int):
     """5b: Kontakt aus dem Papierkorb reaktivieren"""
     try:
-        erfolg = db.update_data(
+        erfolg = db.update(
             db_name=db_path,
             table_name=TABLE_NAME,
             data_dict={"deleted": 0},

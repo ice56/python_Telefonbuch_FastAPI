@@ -1,5 +1,5 @@
 import os
-from user import User
+from user import User as Us
 from db_sqlite import Database as DB
 
 
@@ -7,12 +7,13 @@ def kontakt_suchen(db_helper, db_name, table_name):
     """Option 2: Sucht nach Kontakten oder zeigt alle aktiven an."""
     print("\n--- Kontakt suchen ---")
     suchbegriff = input("ID oder Vor- bzw. Nachnamen eingeben (Leerlassen für alle aktiven Kontakte): ").strip()
-    
+    _user = Us()
+    #_db = DB()
     if suchbegriff == "":
-        rows = db_helper.fetch_data(db_name, table_name)
-        ergebnisse = [User.from_dict(r) for r in rows]
+        rows = db_helper.select(db_name, table_name)
+        ergebnisse = [_user.from_dict(r) for r in rows]
     else:
-        ergebnisse = db_helper.search_persons(db_name, table_name, suchbegriff)
+        ergebnisse = _user.search_user(db_name, table_name, suchbegriff)
         
     if not ergebnisse:
         print("ℹ️ Keine passenden Personen gefunden.")
@@ -31,15 +32,16 @@ def kontakt_anlegen(db_helper, db_name, table_name):
     nachname = input("Nachname: ").strip()
     vorwahl = input("Vorwahl (Optional): ").strip()
     telefon = input("Telefonnummer (Optional): ").strip()
-    
+
+    _user = Us()
     # Validierung: Pflichtfelder prüfen
     if not vorname or not nachname:
         print("❌ Fehler: Vor- und Nachname dürfen nicht leer sein!")
         return
 
     try:
-        neue_person = User(first_name=vorname, last_name=nachname, phone_prefix=vorwahl, phone=telefon)
-        db_helper.save_user(db_name, table_name, neue_person)
+        neue_person = Us(first_name=vorname, last_name=nachname, phone_prefix=vorwahl, phone=telefon)
+        neue_person.save_user(db_name, table_name, neue_person)
         print(f"✅ {neue_person.first_name} {neue_person.last_name} wurde erfolgreich gespeichert.")
     except Exception as e:
         print(f"❌ Datenbankfehler beim Anlegen des Kontakts: {e}")
@@ -55,14 +57,14 @@ def kontakt_bearbeiten(db_helper, db_name, table_name):
         return
 
     try:
-        db_ergebnis = db_helper.fetch_data(db_name, table_name, condition_str="id = ?", condition_values=(id_input,))
+        db_ergebnis = db_helper.select(db_name, table_name, condition_str="id = ?", condition_values=(id_input,))
         if not db_ergebnis:
             print("❌ Fehler: Keine aktive Person mit dieser ID gefunden.")
             return
 
         # Ersten Eintrag aus der Ergebnisliste holen
         einziger_user_dict = db_ergebnis[0]
-        person = User.from_dict(einziger_user_dict)
+        person = Us.from_dict(einziger_user_dict)
         
         print(f"\nBearbeite aktuell: {person.first_name} {person.last_name}")
         print("--- Drücken Sie ENTER, um den alten Wert zu behalten ---")
@@ -72,7 +74,7 @@ def kontakt_bearbeiten(db_helper, db_name, table_name):
         person.phonenumber_prefix = input(f"Vorwahl [{person.phonenumber_prefix}]: ").strip() or person.phonenumber_prefix
         person.phonenumber = input(f"Telefon [{person.phonenumber}]: ").strip() or person.phonenumber
         
-        if db_helper.save_user(db_name, table_name, person):
+        if person.save_user(db_name, table_name, person):
             print("✅ Kontakt erfolgreich aktualisiert!")
     except Exception as e:
         print(f"❌ Fehler beim Bearbeiten des Kontakts: {e}")
@@ -90,7 +92,7 @@ def kontakt_loeschen(db_helper, db_name, table_name):
     
     if bestaetigung in ("ja", "j"):
         try:
-            if db_helper.delete_data(db_name, table_name, condition_str="id = ?", condition_values=(id_input,)):
+            if db_helper.delete(db_name, table_name, condition_str="id = ?", condition_values=(id_input,)):
                 print(f"✅ Kontakt ID {id_input} wurde in den Papierkorb verschoben.")
             else:
                 print("❌ Löschvorgang in der Datenbank fehlgeschlagen (ID evtl. nicht vorhanden).")
@@ -104,8 +106,8 @@ def admin_papierkorb(db_helper, db_name, table_name):
     print("\n--- 🗑️ Admin-Papierkorb ---")
     
     try:
-        rows = db_helper.fetch_data(db_name, table_name, condition_str="deleted = 1", include_deleted=True)
-        geloeschte = [User.from_dict(r) for r in rows]
+        rows = db_helper.select(db_name, table_name, condition_str="deleted = 1", include_deleted=True)
+        geloeschte = [Us.from_dict(r) for r in rows]
         
         if not geloeschte:
             print("ℹ️ Der Papierkorb ist leer.")
@@ -126,7 +128,7 @@ def admin_papierkorb(db_helper, db_name, table_name):
                 print("❌ Fehler: Die ID muss eine gültige Zahl sein!")
                 return
                 
-            erfolg = db_helper.update_data(
+            erfolg = db_helper.update(
                 db_name=db_name,
                 table_name=table_name,
                 data_dict={"deleted": 0},
@@ -158,7 +160,11 @@ def main_menu(db_helper, db_name, table_name):
     """Steuert die Hauptschleife des Programms."""
     while True:
         zeige_menue_text()
-        auswahl = input("Bitte wählen Sie eine Option (1-6): ").strip()
+
+        try:
+            auswahl = input("Bitte wählen Sie eine Option (1-6): ").strip()
+        except KeyboardInterrupt:
+            pass
         
         if auswahl == "1":
             kontakt_anlegen(db_helper, db_name, table_name)
