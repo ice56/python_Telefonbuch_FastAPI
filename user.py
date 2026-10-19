@@ -1,3 +1,4 @@
+import logging
 from db_sqlite import Database as DB
 
 class User:
@@ -5,15 +6,21 @@ class User:
         self.id = id  
         self.first_name = first_name
         self.last_name = last_name
-        self.phonenumber_prefix = phone_prefix
-        self.phonenumber = phone
+        self.phone_prefix = phone_prefix
+        self.phone = phone
         self.deleted = deleted
+        self.logger = logging.getLogger(__name__)
+        self.db = DB()
+        
+    def __del__(self):              #Dekonstrukter
+        pass
 
-    @classmethod
+
+
+    @classmethod    #Dekoratoren
     def from_dict(cls, db_dict):
         """
         Erstellt ein Person-Objekt aus einem Datenbank-Dictionary.
-        Liest jetzt auch die 'id' mit aus.
         """
         if not db_dict:
             return None
@@ -35,57 +42,58 @@ class User:
         daten = {
             "first_name": self.first_name,
             "last_name": self.last_name,
-            "phone_prefix": self.phonenumber_prefix,
-            "phone": self.phonenumber,
+            "phone_prefix": self.phone_prefix,
+            "phone": self.phone,
             "deleted": self.deleted
         }
         if include_id:
             daten["id"] = self.id
         return daten
     
-    def insert_user(self, person_object):    
-            try:
-                db = DB()
-
-                insert, person_object = db.insert("user", person_object)        
+    def insert_user(self, user_object):
+            """
+            Fügt einen Kontakt in die DB ein
+            user_object: User Objekt
+            """
+            self.logger.debug(f"start insert_user user_object:{user_object}") 
+            try:                
+                insert, user_object = self.db.insert("user", user_object)
                 return True
 
             except Exception as e:
+                self.logger.error(f"Fehler beim Einfügen eines Users: {e}") 
                 print(f"Fehler beim Einfügen eines Users: {e}")
                 return False
             finally:
                 pass
 
-    def save_user(self, db_name, table_name, person_object):
+    def save_user(self, person_object):
             """
             Speichert eine Person ab. 
             Erstellt sie neu (INSERT), wenn sie noch keine ID hat.
             Aktualisiert sie (UPDATE), wenn bereits eine ID vorhanden ist.
             """
             try:
-                db = DB()
+                self.logger.debug(f"start save_user person_object:{person_object}") 
                 if person_object.id is None:
-                    return db.insert(db_name, table_name, person_object)
+                    self.logger.debug(f"person_object.id ist None:{person_object}")
+                    return self.db.insert(person_object)
                 else:            
         
                     data_dict = person_object.to_dict(include_id=False)
-                
-                    return db.update(
-                        db_name=db_name,
-                        table_name=table_name,
-                        data_dict=data_dict,
+                    self.logger.debug(f"data_dict:{data_dict}")
+                    return self.db.update(data_dict=data_dict,
                         condition_str="id = ?",
                         condition_values=(person_object.id,)
-                    )
-            except:
-                pass
+                    )                    
+            except Exception as e:
+                self.logger.error(f"Fehler beim Speichern eines Users: {e}") 
 
-    def search_user(self, db_name, table_name, search_term):
+    def search_user(self, search_term):
         """
         Durchsucht die Spalten 'id', 'first_name' und 'last_name' nach dem Suchbegriff.
         Berücksichtigt automatisch 'deleted = 0' und gibt eine Liste von User-Objekten zurück.
         """
-        db = DB()
         if not search_term or not search_term.strip():
             return []
 
@@ -99,9 +107,7 @@ class User:
             condition_str = "first_name LIKE ? OR last_name LIKE ?"
             condition_values = (like_value, like_value)
 
-        rows_dict = db.select(
-            db_name=db_name,
-            table_name=table_name,
+        rows_dict = self.db .select(
             condition_str=condition_str,
             condition_values=condition_values
         )

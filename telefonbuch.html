@@ -137,8 +137,8 @@ function listeAnzeigen(kontakte, imPapierkorb = false) {
     
     const fName = k.first_name || "";
     const lName = k.last_name || "";
-    const prefix = k.phonenumber_prefix || "";
-    const phone = k.phonenumber || "";
+    const prefix = k.phone_prefix || "";
+    const phone = k.phone || "";
     const fullPhone = (prefix || phone) ? `${prefix} ${phone}`.trim() : "Keine Nummer";
 
     li.innerHTML = `
